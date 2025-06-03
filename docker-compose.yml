@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080/api
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    environment:
+      - PORT=8080
+      - DB_PATH=/app/data/todos.db
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      - db
+
+  db:
+    image: alpine:latest
+    volumes:
+      - ./data:/data
+    command: tail -f /dev/null
+
+  # テスト用サービス
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    command: go test -v ./...
+    depends_on:
+      - db
+    profiles:
+      - test
+
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+    working_dir: /app
+    command: npm test
+    profiles:
+      - test
+
+volumes:
+  data:

@@ -1,0 +1,93 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Install dependencies
+      working-directory: ./backend
+      run: go mod download
+    
+    - name: Run tests
+      working-directory: ./backend
+      run: go test -v ./...
+    
+    - name: Run tests with coverage
+      working-directory: ./backend
+      run: |
+        go test -coverprofile=coverage.out ./...
+        go tool cover -html=coverage.out -o coverage.html
+    
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: backend-coverage
+        path: backend/coverage.html
+
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: npm ci
+    
+    - name: Run tests
+      working-directory: ./frontend
+      run: npm test -- --run
+    
+    - name: Run tests with coverage
+      working-directory: ./frontend
+      run: npm run test:coverage -- --run
+    
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: frontend-coverage
+        path: frontend/coverage/
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build and test with Docker Compose
+      run: |
+        docker compose build
+        docker compose --profile test up --abort-on-container-exit
